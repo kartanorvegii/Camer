@@ -1,6 +1,7 @@
 package com.example.ahrytsavets.camera;
 
 import android.annotation.TargetApi;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.icu.text.SimpleDateFormat;
 import android.os.Build;
@@ -38,6 +39,8 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.logging.Logger;
+
+import javax.mail.internet.MimeMessage;
 
 import static org.opencv.imgproc.Imgproc.GaussianBlur;
 import static org.opencv.imgproc.Imgproc.contourArea;
@@ -110,10 +113,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         currentFrame = inputFrame.rgba();
         try{
             currentFrame = detectMotion((Mat)currentFrame, (Mat)previousFrame);
-            Log.d(TAG, String.valueOf(isMoved));
             if(isMoved){
                 currentTime.setToNow();
                 savePicture((Mat)currentFrame);
+                sendEmail();
                 isMoved = false;
             }
             Thread.currentThread().sleep(1000);
@@ -150,8 +153,17 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         }
         return outputFrame;
     }
-    public void sendEmail(Mat frame){
-        savePicture(frame);
+    public void sendEmail(){
+        try {
+            MailSender sender = new MailSender("detectorOfMotions@gmail.com", "16101996");
+            sender.sendMail("Motion Detector",
+                    "Motion was detected at" + currentTime.format2445(),
+                    "detectorOfMotions@gmail.com",
+                    "hrytsavetsanton@gmail.com", Environment.getExternalStorageDirectory()
+                            + "/MotionDetector/" + currentTime.format2445()+".png");
+        } catch (Exception e) {
+            Log.e("SendMail", e.getMessage(), e);
+        }
     }
     public void  savePicture(Mat frame){
         File path = new File(Environment.getExternalStorageDirectory() + "/MotionDetector");
