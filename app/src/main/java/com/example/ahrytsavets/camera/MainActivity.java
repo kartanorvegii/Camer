@@ -36,8 +36,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 import javax.mail.internet.MimeMessage;
@@ -60,8 +63,10 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private double maxArea = 100;
     private Scalar redColor = new Scalar(255, 0, 0);
     private boolean isMoved = false;
-    private Time currentTime = new Time();
     public final String TAG = "MainActivity:";
+    private Calendar currentTime = null;
+    public Calendar startTime = null;
+    public Calendar stopTime = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,6 +80,9 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         mOpenCvCameraView.setCvCameraViewListener(this);
         previousFrame = new Mat(720, 1280, CvType.CV_8UC3);
         currentFrame = new Mat(720, 1280, CvType.CV_8UC3);
+        startTime = getCalendarFromTime(12, 0, 0);
+        stopTime = getCalendarFromTime(17, 0, 0);
+
     }
 
     @Override
@@ -110,14 +118,25 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
     @Override
     public Mat onCameraFrame(final CameraBridgeViewBase.CvCameraViewFrame inputFrame) {
+        ExecutorService emailExecutor = Executors.newSingleThreadExecutor();
         currentFrame = inputFrame.rgba();
         try{
             currentFrame = detectMotion((Mat)currentFrame, (Mat)previousFrame);
-            if(isMoved){
-                currentTime.setToNow();
+            currentTime = Calendar.getInstance();
+            if(isMoved && currentTime.after(startTime) && currentTime.before(stopTime)){
                 savePicture((Mat)currentFrame);
-                sendEmail();
+                emailExecutor.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            sendEmail();
+                        } catch (Exception e) {
+                            Log.d(TAG, e.getMessage() + e.getCause());
+                        }
+                    }
+                });
                 isMoved = false;
+                Log.d(TAG, "Email was sended");
             }
             Thread.currentThread().sleep(1000);
         }catch (Exception e){
@@ -157,20 +176,29 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         try {
             MailSender sender = new MailSender("detectorOfMotions@gmail.com", "16101996");
             sender.sendMail("Motion Detector",
-                    "Motion was detected at" + currentTime.format2445(),
+                    "Motion was detected at" + currentTime.getTime().toString(),
                     "detectorOfMotions@gmail.com",
                     "hrytsavetsanton@gmail.com", Environment.getExternalStorageDirectory()
-                            + "/MotionDetector/" + currentTime.format2445()+".png");
+                            + "/MotionDetector/" + currentTime.getTime().toString()+".png");
         } catch (Exception e) {
             Log.e("SendMail", e.getMessage(), e);
         }
     }
     public void  savePicture(Mat frame){
         File path = new File(Environment.getExternalStorageDirectory() + "/MotionDetector");
-        String filename = currentTime.format2445()+".png";
+        if (!path.exists()){
+            path.mkdir();
+        }
+        String filename = currentTime.getTime().toString()+".png";
         File file = new File(path, filename);
         filename = file.toString();
-        Log.d(TAG, filename);
         Imgcodecs.imwrite(filename,frame);
+    }
+    private static Calendar getCalendarFromTime(int hourOfDay, int minute, int second) {
+        Calendar result = Calendar.getInstance();
+        result.set(Calendar.HOUR_OF_DAY, hourOfDay);
+        result.set(Calendar.MINUTE, minute);
+        result.set(Calendar.SECOND, second);
+        return result;
     }
 }
